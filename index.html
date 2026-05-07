@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>荒川区 防災道路地図</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+    #legend {
+      position: fixed;
+      bottom: 30px;
+      right: 10px;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 12px 16px;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      min-width: 200px;
+    }
+    #legend h3 {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+      font-size: 12px;
+      color: #444;
+    }
+    .legend-line {
+      display: inline-block;
+      width: 28px;
+      height: 4px;
+      margin-right: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .legend-circle {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      flex-shrink: 0;
+      border: 2px solid rgba(0,0,0,0.3);
+    }
+    #title-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(30, 60, 120, 0.92);
+      color: white;
+      padding: 10px 16px;
+      z-index: 1000;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 0.05em;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.9);
+      padding: 20px 32px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #333;
+      z-index: 2000;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    }
+    .data-source {
+      font-size: 10px;
+      color: #888;
+      margin-top: 8px;
+      border-top: 1px solid #eee;
+      padding-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="title-bar">荒川区 防災道路地図</div>
+  <div id="loading">地図データ読み込み中...</div>
+  <div id="map"></div>
+  <div id="legend">
+    <h3>凡例</h3>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#e31a1c;"></span>特定緊急輸送道路（一次路線）
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#ff7f00;"></span>一般緊急輸送道路（二次路線）
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#f0c040;"></span>一般緊急輸送道路（三次路線）
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#6a5acd;"></span>緊急河川敷道路
+    </div>
+    <div class="legend-item">
+      <span class="legend-circle" style="background:#2196F3;"></span>一次避難所（37か所）
+    </div>
+    <div class="legend-item">
+      <span class="legend-circle" style="background:#4CAF50;"></span>緊急医療救護所（6か所）
+    </div>
+    <div class="data-source">
+      データ出典：東京都オープンデータ（緊急輸送道路）<br>
+      東京都都市整備局（広域避難場所）<br>
+      荒川区（一次避難所・緊急医療救護所）
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([35.742, 139.781], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    function roadStyle(feature) {
+      const order = feature.properties['道路次数'];
+      const styles = {
+        '一次路線': { color: '#e31a1c', weight: 4, opacity: 0.9 },
+        '二次路線': { color: '#ff7f00', weight: 3, opacity: 0.85 },
+        '三次路線': { color: '#f0c040', weight: 2, opacity: 0.8 },
+        '緊急河川敷道路': { color: '#6a5acd', weight: 2.5, opacity: 0.8 }
+      };
+      return styles[order] || { color: '#999', weight: 2, opacity: 0.6 };
+    }
+
+    function shelterIcon() {
+      return L.circleMarker([], {
+        radius: 7,
+        fillColor: '#2196F3',
+        color: '#0d47a1',
+        weight: 1.5,
+        opacity: 1,
+        fillOpacity: 0.85
+      });
+    }
+
+    function medicalIcon() {
+      return L.circleMarker([], {
+        radius: 9,
+        fillColor: '#4CAF50',
+        color: '#1b5e20',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9
+      });
+    }
+
+    const loadingEl = document.getElementById('loading');
+
+    Promise.all([
+      fetch('roads.geojson').then(r => r.json()),
+      fetch('shelters.geojson').then(r => r.json()),
+      fetch('medical.geojson').then(r => r.json())
+    ]).then(([roadsData, sheltersData, medicalData]) => {
+
+      // Roads layer — drawn first (bottom)
+      L.geoJSON(roadsData, {
+        style: roadStyle,
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+          layer.bindPopup(
+            `<b>${p['道路次数']}</b><br>種別: ${p['道路種別']}`
+          );
+          layer.on('mouseover', () => layer.setStyle({ weight: 6, opacity: 1 }));
+          layer.on('mouseout', () => layer.setStyle(roadStyle(feature)));
+        }
+      }).addTo(map);
+
+      // 一次避難所
+      L.geoJSON(sheltersData, {
+        pointToLayer: (feature, latlng) =>
+          L.circleMarker(latlng, {
+            radius: 7, fillColor: '#2196F3', color: '#0d47a1',
+            weight: 1.5, opacity: 1, fillOpacity: 0.85
+          }),
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+          layer.bindPopup(
+            `<b>🏫 ${p['名称']}</b><br><span style="color:#555">${p['住所']}</span><br><small>一次避難所</small>`
+          );
+        }
+      }).addTo(map);
+
+      // 緊急医療救護所
+      L.geoJSON(medicalData, {
+        pointToLayer: (feature, latlng) =>
+          L.circleMarker(latlng, {
+            radius: 9, fillColor: '#4CAF50', color: '#1b5e20',
+            weight: 2, opacity: 1, fillOpacity: 0.9
+          }),
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+          layer.bindPopup(
+            `<b>🏥 ${p['名称']}</b><br><span style="color:#555">${p['住所']}</span><br><small>緊急医療救護所</small>`
+          );
+        }
+      }).addTo(map);
+
+      loadingEl.style.display = 'none';
+    }).catch(err => {
+      loadingEl.textContent = 'データ読み込みエラー: ' + err.message;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
